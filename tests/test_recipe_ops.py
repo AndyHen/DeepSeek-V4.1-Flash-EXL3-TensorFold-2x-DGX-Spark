@@ -34,11 +34,11 @@ VERBATIM = {
     "smoke_chat.py": "e1516eb218e5b5e16aeaf65eea2fe7dd195bdbe4dc62d403cd3cb6a712685e96",
     "tests/test_bench_decode.py": "bab0efee6373df8f14a77d3aa50ecdc9a69fb07786f59d8559336ea01fe020e8",
     "tests/test_smoke_chat.py": "7dbd9d977db194c349e7b12992d986cbf758c203224412c5bc52334ed367d35f",
-    # TensorFold's tools/bench_concurrent.py at TF_SHA (sfxnz/TensorFold branch dsv41-recipe-engine5).
+    # TensorFold's tools/bench_concurrent.py at TF_SHA (the fork branch feature/parallel-8, off dsv41-recipe-engine5).
     "tools/bench_concurrent.py": "262e5323e3ba439056b2794f96edf85caf5a81ea2790dd2ac374069b7dbed501",
 }
-TF_REPO = "https://github.com/sfxnz/TensorFold.git"
-TF_SHA = "19f5478ba778531ffb9a1ebb9c1ca7e06b8ceacb"
+TF_REPO = "https://github.com/AndyHen/TensorFold.git"
+TF_SHA = "82c7f2b26577c56eafe64be2d500b8fb7c0d49e5"
 SNAPSHOT_SHA = "982b70452f399814f56b46272fd30394ae10d58c"
 CONFIG_SHA256 = "6469adab394edead3eec148323e7471582d08acdf60a438bf0c9e815b69f36c5"
 INDEX_SHA256 = "91731e4af38696bd4c09e960f4b599d1d49f35d445e4f88a43cc355d9e139f03"
@@ -213,7 +213,7 @@ class GuardTests(unittest.TestCase):
         self.refused("is below 95 GiB", MEM_GATE_GIB="0")
         self.assertIn("mem_gate=0", self.accepted(MEM_GATE_GIB="0", FORCE_UNSAFE_MEM_GATE="1").stdout)
         self.assertIn("mem_gate=110", self.accepted(MEM_GATE_GIB="110").stdout)
-        for parallel in range(1, 5):
+        for parallel in range(1, 9):
             for context in (4096, 65536, 524288, 917504, 1048576):
                 floor = _gate(parallel, context)
                 env = {"PARALLEL": str(parallel), "CONTEXT": str(context)}
@@ -224,13 +224,13 @@ class GuardTests(unittest.TestCase):
     def test_parallel_and_decode_share(self) -> None:
         d = _defaults()
         self.assertEqual((d["PARALLEL"], d["DECODE_SHARE"]), ("4", "0.5"))
-        for bad in ("0", "5", "04", "8", "-1", "2.0", "auto"):
-            self.refused("must be 1, 2, 3 or 4", PARALLEL=bad)
+        for bad in ("0", "9", "04", "-1", "2.0", "auto"):
+            self.refused("must be 1 to 8", PARALLEL=bad)
         for bad in ("1.5", "-0.1", ".5", "2", "0.5 ", "1e-1"):
             self.refused("must be a decimal in [0, 1]", DECODE_SHARE=bad)
         for share in ("0", "0.25", "0.5", "1", "1.0"):
             self.assertIn(f"decode_share={share} ", self.accepted(DECODE_SHARE=share).stdout)
-        for parallel in ("1", "2", "3", "4"):
+        for parallel in ("1", "2", "3", "4", "5", "6", "7", "8"):
             self.assertIn(f"parallel={parallel} ", self.accepted(PARALLEL=parallel).stdout)
 
     def test_modes(self) -> None:
@@ -439,7 +439,7 @@ class RankIdentityTests(unittest.TestCase):
             self.skipTest("PyYAML not installed")
         serve_env = yaml.load(_read("recipe.yaml"), Loader=yaml.BaseLoader)["serve"]["env"]
         self.assertEqual(sorted(k for k in serve_env if k.startswith("TF_DSV41_")),
-                         ["TF_DSV41_CACHE_ENTRIES", "TF_DSV41_CACHE_GIB"])
+                         ["TF_DSV41_CACHE_ENTRIES", "TF_DSV41_CACHE_GIB", "TF_DSV41_MAX_LANES"])
 
     def test_rank_argv_differs_only_by_rank_and_http(self) -> None:
         r0, r1 = self.args_out()[:2]

@@ -22,12 +22,12 @@ model:
 image:
   base: nvcr.io/nvidia/pytorch:26.07-py3
   digest: sha256:2140e699b3beaf7f96a0081fd9c9406bc3832b435cdb60dfa2d261f7d2f34a1c
-  local_tag: &image tf-dsv41-flash:0.6.6-19f5478
+  local_tag: &image tf-dsv41-flash:0.6.6-82c7f2b
   build: docker/Dockerfile (pip install git+TF_REPO@TF_SHA under docker/constraints.txt; the commit pip installed is checked; no installed package may change, so torch and triton stay the base's)
 
 engine:
   name: tensorfold
-  version: 0.6.6 + deepseek_v41 CUDA family (ashhart/TensorFold PR 390 and PR 391) + the device keyed draw for top_k-off rows + the speed units C1, C2, C3, C4, C5, C7, C8 + concurrent requests (--parallel 1 to 4, units N0-N10) + the decode units P4, P2, P10, P1, P6b
+  version: 0.6.6 + deepseek_v41 CUDA family (ashhart/TensorFold PR 390 and PR 391) + the device keyed draw for top_k-off rows + the speed units C1, C2, C3, C4, C5, C7, C8 + concurrent requests (--parallel 1 to 8 in this fork, units N0-N10) + the decode units P4, P2, P10, P1, P6b
   # The fork's integration branch: release v0.6.4 (6ea5ade), the family (e174ee0 has PR 391's tip tree, 0d91389), the
   # device keyed draw (C6, C6b; db7f53e has 41306d5's tree), then the speed units, each merged after its own receipts
   # (lab data/tf-dsv41/receipts/c1..c8): C1 prompt decoder-row skip, C3 prompt-window EXL3 expert kernel, C2 decode
@@ -45,10 +45,11 @@ engine:
   # b86514a's. They are the engine's defaults, so no recipe flag turns them on.
   # Upstream's Python engine ends at 0.6.6 on its python-0.6 branch (ashhart/TensorFold issue 286); it closed PRs
   # 390, 391 and 408. Its main is the Zig engine 1.0.x, which has no DeepSeek-V4 family (a port for 1.0.x, CHANGELOG
-  # 1.0.0) and serves CUDA for Nemotron only, single-host (two-rank --speed-up is two Macs). So the recipe pins the fork. A bump needs new evidence.
-  repo: &tf_repo https://github.com/sfxnz/TensorFold.git
-  branch: dsv41-recipe-engine5
-  commit: &tf_sha 19f5478ba778531ffb9a1ebb9c1ca7e06b8ceacb
+  # 1.0.0) and serves CUDA for Nemotron only, single-host (two-rank --speed-up is two Macs). So this fork pins its
+  # own TensorFold branch (feature/parallel-8: MAX_LANES 8, env-overridable). A bump needs new evidence.
+  repo: &tf_repo https://github.com/AndyHen/TensorFold.git
+  branch: feature/parallel-8
+  commit: &tf_sha 82c7f2b26577c56eafe64be2d500b8fb7c0d49e5
   base_release: v0.6.6 (cb2ebf0; upstream's python-0.6 at ed78d6f merged as dc971a2), on v0.6.4 (6ea5ade)
   upstream_prs: [https://github.com/ashhart/TensorFold/pull/390, https://github.com/ashhart/TensorFold/pull/391, https://github.com/ashhart/TensorFold/pull/408]
   upstream_status: https://github.com/ashhart/TensorFold/issues/286 (Python engine ends at 0.6.6 on branch python-0.6; PRs 390, 391 and 408 closed; main is the Zig engine 1.0.x, with no DeepSeek-V4 family and CUDA for Nemotron only, single-host)
@@ -88,7 +89,7 @@ serve:
     # (evidence/s6-concurrent/2B/needle_lanes.jsonl); s7 five times at b86514a and 19f5478, with that needle beside 3
     # lanes again at 19f5478 (evidence/s7-speed/2B/needle_lanes.jsonl).
     CONTEXT: 1048576
-    # Requests decoded together, 1 to 4 (the family's MAX_LANES); each lane holds a whole CONTEXT window, allocated
+    # Requests decoded together, 1 to 8 (this fork's MAX_LANES; upstream caps 4): each lane holds a whole CONTEXT window,
     # at startup. measured: s6 ran PARALLEL=1 and 4 ABBA through run.sh. At 4 x 1048576 MemAvailable stayed at least
     # 17.4 GiB on the head and 21.9 on the worker on warm-cache boots (13.0 / 14.7 GiB while the first start compiled
     # the kernels, evidence/s6-concurrent/W1/memwatch.tsv), and a lone request decoded the ruler's cells within 0.5% of
@@ -137,6 +138,8 @@ serve:
     #    and entries (engine default 8). Empty: not passed, the engine default applies on both ranks.
     TF_DSV41_CACHE_GIB: ""
     TF_DSV41_CACHE_ENTRIES: ""
+    # this fork's lane cap (engine default 8; upstream 4). 4 restores the upstream cap without a rebuild.
+    TF_DSV41_MAX_LANES: ""
 
 readme:
   # Rows of the README "Defaults" table. {NAME} is replaced by serve.env.NAME.
